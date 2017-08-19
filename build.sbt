@@ -25,7 +25,10 @@ scalaVersion := "2.11.11"
 val unfilteredVersion = "0.9.1"
 
 libraryDependencies ++= Seq(
-   "ws.unfiltered" %% "unfiltered-netty-server" % unfilteredVersion,
-   "net.databinder.dispatch" %% "dispatch-core" % "0.13.1",
-   "ws.unfiltered" %% "unfiltered-specs2" % unfilteredVersion % "test"
+  "ws.unfiltered" %% "unfiltered-netty-server" % unfilteredVersion,
+  "net.databinder.dispatch" %% "dispatch-core" % "0.13.1",
+  "ws.unfiltered" %% "unfiltered-specs2" % unfilteredVersion % "test",
+  "org.prevayler" % "prevayler-core" % "2.6",
+  "io.spray" %%  "spray-json" % "1.3.3",
+  "commons-io" % "commons-io" % "2.5"
 )
