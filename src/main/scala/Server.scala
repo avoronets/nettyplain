@@ -21,6 +21,9 @@ object MyJsonProtocol extends DefaultJsonProtocol {
   implicit val visitJsonFormat = jsonFormat3(VisitJson)
   implicit val visitJsonWrapperFormat = jsonFormat1(VisitJsonWrapper)
   implicit val avgJsonFormat = jsonFormat1(AvgJson)
+  implicit val visitJsonForUpdate = jsonFormat5(VisitJsonForUpdate)
+  implicit val locationJsonForUpdate = jsonFormat5(LocationJsonForUpdate)
+  implicit val userJsonForUpdate = jsonFormat6(UserJsonForUpdate)
 
 }
 object Server {

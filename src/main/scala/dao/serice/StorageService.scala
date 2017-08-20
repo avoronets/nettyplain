@@ -40,7 +40,9 @@ object StorageServiceImpl extends StorageService
 
   override def getVisits(userId: Int, filterOpt: Option[Visit => Boolean]): Seq[Visit] = {
     val allVisits = visits.filter(_._2.user == userId).values.toList
-    if(filterOpt.isEmpty) allVisits.sortBy(_.visited_at) else allVisits.filter(filterOpt.get).sortBy(_.visited_at)
+    if(allVisits.isEmpty) throw NotFoundException("visits not found by user id")
+    else if(filterOpt.isEmpty) allVisits.sortBy(_.visited_at)
+    else allVisits.filter(filterOpt.get).sortBy(_.visited_at)
   }
 
   override def getLocationAvg(locationId: Int, filterOpt: Option[Visit => Boolean]): Option[Double] = {
@@ -50,29 +52,27 @@ object StorageServiceImpl extends StorageService
       if(visitsByLocation.isEmpty) 0.00
       else{
         if(filterOpt.isEmpty) Math.round(visitsByLocation.map(_.mark).sum.toDouble / visitsByLocation.size * 100000d) / 100000d
-        else Math.round(visitsByLocation.filter(filterOpt.get).map(_.mark).sum.toDouble / visitsByLocation.size * 100000d) / 100000d
+        else {
+          val filtered = visitsByLocation.filter(filterOpt.get)
+          Math.round(filtered.map(_.mark).sum.toDouble / filtered.size * 100000d) / 100000d
+        }
       }
     }
   }
 
-  override def insert(user: User): Unit = {
-    val userId = users.size + 1
-    users += userId -> user
-  }
+  override def insert(user: User): Unit = users += user.id -> user
 
-  override def insert(visit: Visit): Unit = {
-    val visitId = visits.size + 1
-    visits += visitId -> visit
-  }
+  override def insert(visit: Visit): Unit = visits += visit.id -> visit
 
-  override def insert(location: Location): Unit = {
-    val locationId = locations.size + 1
-    locations += locationId -> location
-  }
+  override def insert(location: Location): Unit = locations += location.id -> location
 
   override def update(user: User): Unit = users.update(user.id, user)
 
   override def update(visit: Visit): Unit = visits.update(visit.id, visit)
 
   override def update(location: Location): Unit = locations.update(location.id, location)
+}
+
+case class NotFoundException(msg: String) extends Exception {
+  override def getMessage = msg
 }
