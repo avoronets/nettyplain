@@ -52,8 +52,8 @@ object Server {
     entities
   }
 
-  def prepareData: List[EntitiesJson] = {
-    val zipFile = new ZipFile("C:/users/avoro/data.zip")
+  def prepareData(): List[EntitiesJson] = {
+    val zipFile = new ZipFile("/tmp/data/data.zip")
     val entries: util.Enumeration[_ <: ZipEntry] = zipFile.entries().toIterator
     val result: List[Option[EntitiesJson]] = entries.map
     {entry =>
@@ -84,14 +84,12 @@ object Server {
   }
 
   def main(args: Array[String]): Unit = {
-    val data = prepareData
-    unfiltered.netty.Server.http(8080)
+    prepareData()
+    unfiltered.netty.Server.http(80)
       .handler(Palindrome)
       .handler(Time)
       .handler(HighLoadCup)
-      .run { s =>
-        unfiltered.util.Browser.open(s.portBindings.head.url + "/time")
-      }
+      .run()
     dispatch.Http.default.shutdown()
   }
 }
