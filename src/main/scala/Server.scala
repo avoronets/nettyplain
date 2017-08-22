@@ -84,7 +84,9 @@ object Server {
   }
 
   def main(args: Array[String]): Unit = {
+    println("Start preparing data...")
     prepareData()
+    println("Data prepared, starting server...")
     unfiltered.netty.Server.http(80)
       .handler(Palindrome)
       .handler(Time)

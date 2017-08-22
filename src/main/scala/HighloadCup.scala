@@ -9,6 +9,7 @@ import unfiltered.netty.cycle.Plan.Intent
 import unfiltered.netty.{ServerErrorResponse, cycle}
 import unfiltered.request.{Body, _}
 import unfiltered.response.{BadRequest, NotFound, Ok, ResponseString}
+import utils.DateHelper
 
 object FromDateParam extends Params.Extract("fromDate", Params.first ~> Params.long)
 
@@ -63,7 +64,7 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
     case req@Path(Seg("users" :: id :: Nil)) => req match {
       case GET(_) =>
         try {
-          StorageServiceImpl.findUser(id.toInt).fold(NotFound ~> ResponseString(""))(user =>
+          StorageServiceImpl.findUser(id.toInt).fold(NotFound ~> ResponseString("Not found"))(user =>
             Ok ~> ResponseString(user.toJson.compactPrint))
         } catch {
           case e: Exception => NotFound ~> ResponseString(e.getMessage)
@@ -92,7 +93,7 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
     case req@Path(Seg("visits" :: id :: Nil)) => req match {
       case GET(_) =>
         try {
-          StorageServiceImpl.findVisit(id.toInt).fold(NotFound ~> ResponseString(""))(visit =>
+          StorageServiceImpl.findVisit(id.toInt).fold(NotFound ~> ResponseString("Not found"))(visit =>
             Ok ~> ResponseString(visit.toJson.compactPrint))
         } catch {
           case e: Exception => NotFound ~> ResponseString(e.getMessage)
@@ -120,7 +121,7 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
     case req@Path(Seg("locations" :: id :: Nil)) => req match {
       case GET(_) =>
         try {
-          StorageServiceImpl.findLocation(id.toInt).fold(NotFound ~> ResponseString(""))(location =>
+          StorageServiceImpl.findLocation(id.toInt).fold(NotFound ~> ResponseString("Not found"))(location =>
             Ok ~> ResponseString(location.toJson.compactPrint))
         } catch {
           case e: Exception => NotFound ~> ResponseString(e.getMessage)
@@ -186,16 +187,14 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
         val seq = Seq(fromDateParam, toDateParam, fromAgeParam, toAgeParam, genderParam).flatten
 
         def countAge(dateOfBirth: Long): Long = {
-          val now = new Date().getTime
-          val diff = now - dateOfBirth
-          diff / (1000L * 60 * 60 * 24 * 365)
+          DateHelper.getDiffInYears(DateHelper.now, new Date(dateOfBirth))
         }
 
         def filter: Visit => Boolean = v => {
           val userOpt = StorageServiceImpl.findUser(v.user)
           fromDateParam.forall(from => v.visited_at > from.toLong) &&
             toDateParam.forall(to => v.visited_at < to.toLong) &&
-            fromAgeParam.forall(age => userOpt.forall(u => countAge(u.birth_date) > age.toLong)) &&
+            fromAgeParam.forall(fromAge => userOpt.forall(u => countAge(u.birth_date) > fromAge.toLong)) &&
             toAgeParam.forall(toAge => userOpt.forall(u => countAge(u.birth_date) < toAge.toLong)) &&
             genderParam.forall(gender => userOpt.forall(u => u.gender == gender))
         }
@@ -203,7 +202,7 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
         println(params.mkString)
         try {
           val avg = StorageServiceImpl.getLocationAvg(id.toInt, if (seq.isEmpty) None else Some(filter))
-          avg.fold(NotFound ~> ResponseString(""))(avg => Ok ~> ResponseString(AvgJson(avg).toJson.compactPrint))
+          avg.fold(NotFound ~> ResponseString("Not found"))(avg => Ok ~> ResponseString(AvgJson(avg).toJson.compactPrint))
         } catch {
           case e: Exception => BadRequest ~> ResponseString(e.getMessage)
         }

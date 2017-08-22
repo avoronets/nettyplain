@@ -30,7 +30,8 @@ libraryDependencies ++= Seq(
   "ws.unfiltered" %% "unfiltered-specs2" % unfilteredVersion % "test",
   "org.prevayler" % "prevayler-core" % "2.6",
   "io.spray" %%  "spray-json" % "1.3.3",
-  "commons-io" % "commons-io" % "2.5"
+  "commons-io" % "commons-io" % "2.5",
+  "joda-time" % "joda-time" % "2.9.9"
 )
 
 
