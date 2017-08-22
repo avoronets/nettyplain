@@ -38,7 +38,7 @@ object StorageServiceImpl extends StorageService
 
   override def findLocation(id: Int): Option[Location] = locations.get(id)
 
-  override def getVisits(userId: Int, filterOpt: Option[Visit => Boolean]): Seq[Visit] = {
+  override def getVisits(userId: Int, filterOpt: => Option[Visit => Boolean]): Seq[Visit] = {
     if(findUser(userId).isEmpty) throw NotFoundException("user not found by user id")
     val allVisits = visits.filter(_._2.user == userId).values.toList
     if(filterOpt.isEmpty) allVisits.sortBy(_.visited_at)
@@ -54,7 +54,8 @@ object StorageServiceImpl extends StorageService
         if(filterOpt.isEmpty) Math.round(visitsByLocation.map(_.mark).sum.toDouble / visitsByLocation.size * 100000d) / 100000d
         else {
           val filtered = visitsByLocation.filter(filterOpt.get)
-          Math.round(filtered.map(_.mark).sum.toDouble / filtered.size * 100000d) / 100000d
+          if(filtered.isEmpty) 0.00
+          else Math.round(filtered.map(_.mark).sum.toDouble / filtered.size * 100000d) / 100000d
         }
       }
     }

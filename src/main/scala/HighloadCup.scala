@@ -24,6 +24,8 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
 
   import com.example.MyJsonProtocol._
 
+  def canBeParsedToInt(str: String) = try{str.toInt; true}catch {case e: Exception => false}
+
   override def intent: Intent = {
     case req @ POST(Path("/users/new") & Params(params)) => try {
       val jsonBody = JsonParser(ParserInput(Body.bytes(req)))
@@ -148,64 +150,74 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
 
     case req@Path(Seg("users" :: id :: "visits" :: Nil)) & Params(params) => req match {
       case GET(_) =>
-        val fromDateParam = params.get("fromDate").flatMap(_.headOption)
-        val toDateParam = params.get("toDate").flatMap(_.headOption)
-        val countryParam = params.get("country").flatMap(_.headOption)
-        val toDistanceParam = params.get("toDistance").flatMap(_.headOption)
+        if(canBeParsedToInt(id)){
+          val fromDateParam = params.get("fromDate").flatMap(_.headOption)
+          val toDateParam = params.get("toDate").flatMap(_.headOption)
+          val countryParam = params.get("country").flatMap(_.headOption)
+          val toDistanceParam = params.get("toDistance").flatMap(_.headOption)
 
-        val seq = Seq(fromDateParam, toDateParam, countryParam, toDistanceParam).flatten
+          val seq = Seq(fromDateParam, toDateParam, countryParam, toDistanceParam).flatten
 
-        def filter: Visit => Boolean = v => {
-          val locOpt = StorageServiceImpl.findLocation(v.location)
-          fromDateParam.forall(from => v.visited_at > from.toLong) &&
-            toDateParam.forall(to => v.visited_at < to.toLong) &&
-            countryParam.flatMap(country => locOpt.map(loc => loc.country == country)).getOrElse(true) &&
-            toDistanceParam.flatMap(toDist => locOpt.map(_.distance < toDist.toInt)).getOrElse(true)
+          def filter: Visit => Boolean = v => {
+            val locOpt = StorageServiceImpl.findLocation(v.location)
+            fromDateParam.forall(from => v.visited_at > from.toLong) &&
+                toDateParam.forall(to => v.visited_at < to.toLong) &&
+                countryParam.flatMap(country => locOpt.map(loc => loc.country == country)).getOrElse(true) &&
+                toDistanceParam.flatMap(toDist => locOpt.map(_.distance < toDist.toInt)).getOrElse(true)
+          }
+
+          println(params.mkString)
+
+          try {
+            val visits = StorageServiceImpl.getVisits(id.toInt, if (seq.isEmpty) None else Some(filter))
+            Ok ~> ResponseString(VisitJsonWrapper(visits.map(VisitJsonHelper.from)).toJson.compactPrint)
+          } catch {
+            case NotFoundException(msg) => NotFound ~> ResponseString(msg)
+            case e: Exception =>
+              BadRequest ~> ResponseString(e.getMessage)
+          }
+        }else{
+          NotFound ~> ResponseString("Not found")
         }
 
-        println(params.mkString)
-
-        try {
-          val visits = StorageServiceImpl.getVisits(id.toInt, if (seq.isEmpty) None else Some(filter))
-          Ok ~> ResponseString(VisitJsonWrapper(visits.map(VisitJsonHelper.from)).toJson.compactPrint)
-        } catch {
-          case NotFoundException(msg) => NotFound ~> ResponseString(msg)
-          case e: Exception =>
-            BadRequest ~> ResponseString(e.getMessage)
-        }
       case POST(_) => Ok
     }
 
     case req@Path(Seg("locations" :: id :: "avg" :: Nil)) & Params(params) => req match {
       case GET(_) =>
-        val fromDateParam = params.get("fromDate").flatMap(_.headOption)
-        val toDateParam = params.get("toDate").flatMap(_.headOption)
-        val fromAgeParam = params.get("fromAge").flatMap(_.headOption)
-        val toAgeParam = params.get("toAge").flatMap(_.headOption)
-        val genderParam = params.get("gender").flatMap(_.headOption)
+        if(canBeParsedToInt(id)){
+          val fromDateParam = params.get("fromDate").flatMap(_.headOption)
+          val toDateParam = params.get("toDate").flatMap(_.headOption)
+          val fromAgeParam = params.get("fromAge").flatMap(_.headOption)
+          val toAgeParam = params.get("toAge").flatMap(_.headOption)
+          val genderParam = params.get("gender").flatMap(_.headOption)
 
-        val seq = Seq(fromDateParam, toDateParam, fromAgeParam, toAgeParam, genderParam).flatten
+          val seq = Seq(fromDateParam, toDateParam, fromAgeParam, toAgeParam, genderParam).flatten
 
-        def countAge(dateOfBirth: Long): Long = {
-          DateHelper.getDiffInYears(DateHelper.now, new Date(dateOfBirth))
+          def countAge(dateOfBirth: Long): Long = {
+            DateHelper.getDiffInYears(DateHelper.now, new Date(dateOfBirth))
+          }
+
+          def filter: Visit => Boolean = v => {
+            val userOpt = StorageServiceImpl.findUser(v.user)
+            fromDateParam.forall(from => v.visited_at > from.toLong) &&
+                toDateParam.forall(to => v.visited_at < to.toLong) &&
+                fromAgeParam.forall(fromAge => userOpt.forall(u => countAge(u.birth_date) > fromAge.toLong)) &&
+                toAgeParam.forall(toAge => userOpt.forall(u => countAge(u.birth_date) < toAge.toLong)) &&
+                genderParam.forall(gender => userOpt.forall(u => u.gender == gender))
+          }
+
+          println(params.mkString)
+          try {
+            val avg = StorageServiceImpl.getLocationAvg(id.toInt, if (seq.isEmpty) None else Some(filter))
+            avg.fold(NotFound ~> ResponseString("Not found"))(avg => Ok ~> ResponseString(AvgJson(avg).toJson.compactPrint))
+          } catch {
+            case e: Exception => BadRequest ~> ResponseString(e.getMessage)
+          }
+        } else {
+          NotFound ~> ResponseString("Not found")
         }
 
-        def filter: Visit => Boolean = v => {
-          val userOpt = StorageServiceImpl.findUser(v.user)
-          fromDateParam.forall(from => v.visited_at > from.toLong) &&
-            toDateParam.forall(to => v.visited_at < to.toLong) &&
-            fromAgeParam.forall(fromAge => userOpt.forall(u => countAge(u.birth_date) > fromAge.toLong)) &&
-            toAgeParam.forall(toAge => userOpt.forall(u => countAge(u.birth_date) < toAge.toLong)) &&
-            genderParam.forall(gender => userOpt.forall(u => u.gender == gender))
-        }
-
-        println(params.mkString)
-        try {
-          val avg = StorageServiceImpl.getLocationAvg(id.toInt, if (seq.isEmpty) None else Some(filter))
-          avg.fold(NotFound ~> ResponseString("Not found"))(avg => Ok ~> ResponseString(AvgJson(avg).toJson.compactPrint))
-        } catch {
-          case e: Exception => BadRequest ~> ResponseString(e.getMessage)
-        }
       case POST(_) => Ok
     }
   }
