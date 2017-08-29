@@ -1,15 +1,16 @@
 package dao.serice
 
 import dao.entity.{Location, User, Visit}
+import utils.DateHelper
 
-import scala.collection.mutable
+import scala.collection._
 
 trait StorageService {
 
   def findUser(id: Int): Option[User]
   def findVisit(id: Int): Option[Visit]
   def findLocation(id: Int): Option[Location]
-  def getVisits(userId: Int, filterOpt: Option[Visit => Boolean]): Seq[Visit]
+  def getVisits(userId: Int, filterOpt: => Option[Visit => Boolean]): Seq[Visit]
   def getLocationAvg(locationId: Int, filterOpt: Option[Visit => Boolean]): Option[Double]
 
   def insert(user: User): Unit
@@ -28,9 +29,9 @@ object StorageServiceImpl extends StorageService
   type UserId = Int
   type LocationId = Int
 
-  private val users: mutable.Map[Int, User] = mutable.Map.empty
-  private val visits: mutable.Map[Int, Visit] = mutable.Map.empty
-  private val locations: mutable.Map[Int, Location] = mutable.Map.empty
+  private val users: concurrent.Map[Int, User] = concurrent.TrieMap.empty[Int, User]
+  private val visits: concurrent.Map[Int, Visit] = concurrent.TrieMap.empty[Int, Visit]
+  private val locations: concurrent.Map[Int, Location] = concurrent.TrieMap.empty[Int, Location]
 
   override def findUser(id: Int): Option[User] = users.get(id)
 
@@ -53,7 +54,13 @@ object StorageServiceImpl extends StorageService
       else{
         if(filterOpt.isEmpty) Math.round(visitsByLocation.map(_.mark).sum.toDouble / visitsByLocation.size * 100000d) / 100000d
         else {
+          val results = visitsByLocation.toList.map(v => (v.mark, users(v.user))).map{case(mark, u) => (mark, u.id, u.email, u.gender, u.birth_date, DateHelper.countAge(u.birth_date))}
+//          println("ВСЕ")
+//          println(results.mkString("\n"))
           val filtered = visitsByLocation.filter(filterOpt.get)
+          val resultsFiltered = filtered.map(v => (v.mark, users(v.user))).map{case(mark, u) => (mark, u.id, u.email, u.gender, u.birth_date, DateHelper.countAge(u.birth_date))}
+//          println("Отфильтрованы")
+//          println(resultsFiltered.mkString("\n"))
           if(filtered.isEmpty) 0.00
           else Math.round(filtered.map(_.mark).sum.toDouble / filtered.size * 100000d) / 100000d
         }

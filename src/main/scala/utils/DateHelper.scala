@@ -2,6 +2,8 @@ package utils
 
 import java.sql.Timestamp
 import java.text.{DateFormatSymbols, SimpleDateFormat}
+import java.time.{LocalDate, ZoneId, ZoneOffset}
+import java.time.temporal.ChronoUnit
 import java.util.{Calendar, Date, GregorianCalendar, TimeZone}
 
 import org.joda.time._
@@ -194,5 +196,12 @@ trait DateHelper {
     }
 
     def isSameDay(date1: Date, date2: Date) = getDiffInDays(date1, date2) == 0
+
+    def countAge(dateOfBirth: Long): Long = {
+        val now = java.time.LocalDateTime.now(ZoneId.ofOffset("UTC", ZoneOffset.UTC))
+        val birthday = java.time.LocalDateTime.ofEpochSecond(dateOfBirth, 0, ZoneOffset.UTC)
+        //            DateHelper.getDiffInYears(DateHelper.now, new Date(dateOfBirth))
+        Math.abs(ChronoUnit.YEARS.between(birthday, now))
+    }
 
 }

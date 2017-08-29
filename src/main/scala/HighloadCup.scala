@@ -1,6 +1,7 @@
 package com.example
 
-import java.util.Date
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 import dao.entity.{Location, User, Visit}
 import dao.serice.{NotFoundException, StorageServiceImpl}
@@ -74,16 +75,33 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
       case POST(_) =>
         try {
           val oldUser = StorageServiceImpl.findUser(id.toInt)
-          if (oldUser.isEmpty) NotFound
+          if (oldUser.isEmpty) NotFound ~> ResponseString("Not found")
           else {
             var user = oldUser.get
             val jsonBody = JsonParser(ParserInput(Body.bytes(req)))
-            val userJsonModel = jsonBody.convertTo[UserJsonForUpdate]
-            if (userJsonModel.email.nonEmpty) user = user.copy(email = userJsonModel.email.get)
-            if (userJsonModel.first_name.nonEmpty) user = user.copy(first_name = userJsonModel.first_name.get)
-            if (userJsonModel.last_name.nonEmpty) user = user.copy(last_name = userJsonModel.last_name.get)
-            if (userJsonModel.gender.nonEmpty) user = user.copy(gender = userJsonModel.gender.get)
-            if (userJsonModel.birth_date.nonEmpty) user = user.copy(birth_date = userJsonModel.birth_date.get)
+            val values = jsonBody.asJsObject().fields
+            if (values.contains("email")) values("email") match {
+                case JsString(str) => user = user.copy(email = str)
+                case _ => throw new Exception("invalid email")
+            }
+            if (values.contains("first_name")) values("first_name") match {
+                case JsString(str) => user = user.copy(first_name = str)
+                case _ => throw new Exception("invalid first_name")
+            }
+            if (values.contains("last_name")) values("last_name") match {
+                case JsString(str) => user = user.copy(last_name = str)
+                case _ => throw new Exception("invalid last_name")
+            }
+            if (values.contains("gender")) values("gender") match {
+                case str @ (JsString("f") | JsString("m")) => user = user.copy(gender = str.convertTo[String])
+                case _ => throw new Exception("invalid gender")
+            }
+            if (values.contains("birth_date")) values("birth_date") match {
+                case JsNumber(value) =>
+                    LocalDate.ofEpochDay(value.toLong)
+                    user = user.copy(birth_date = value.toLong)
+                case _ => throw new Exception("invalid birth_date")
+            }
             StorageServiceImpl.update(user)
             Ok ~> ResponseString("""{}""")
           }
@@ -103,15 +121,30 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
       case POST(_) =>
         try {
           val oldVisit = StorageServiceImpl.findVisit(id.toInt)
-          if (oldVisit.isEmpty) NotFound
+          if (oldVisit.isEmpty) NotFound ~> ResponseString("Not found")
           else {
             var visit = oldVisit.get
             val jsonBody = JsonParser(ParserInput(Body.bytes(req)))
-            val visitJsonModel = jsonBody.convertTo[VisitJsonForUpdate]
-            if (visitJsonModel.location.nonEmpty) visit = visit.copy(location = visitJsonModel.location.get)
-            if (visitJsonModel.user.nonEmpty) visit = visit.copy(user = visitJsonModel.user.get)
-            if (visitJsonModel.visited_at.nonEmpty) visit = visit.copy(visited_at = visitJsonModel.visited_at.get)
-            if (visitJsonModel.mark.nonEmpty) visit = visit.copy(mark = visitJsonModel.mark.get)
+            val values = jsonBody.asJsObject().fields
+            if (values.contains("location")) values("location") match {
+                case JsNumber(number) => visit = visit.copy(location = number.toInt)
+                case _ => throw new Exception("invalid location")
+            }
+            if (values.contains("user")) values("user") match {
+                case JsNumber(number) => visit = visit.copy(user = number.toInt)
+                case _ => throw new Exception("invalid user")
+            }
+            if (values.contains("visited_at")) values("visited_at") match {
+                case JsNumber(number) =>
+                    LocalDate.ofEpochDay(number.toLong)
+                    visit = visit.copy(visited_at = number.toInt)
+                case _ => throw new Exception("invalid location")
+            }
+            if (values.contains("mark")) values("mark") match {
+                case JsNumber(number)  if number >= 0 && number <=5 =>
+                    visit = visit.copy(mark = number.toInt)
+                case _ => throw new Exception("invalid location")
+            }
             StorageServiceImpl.update(visit)
             Ok ~> ResponseString("""{}""")
           }
@@ -131,15 +164,28 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
       case POST(_) =>
         try {
           val oldLocation = StorageServiceImpl.findLocation(id.toInt)
-          if (oldLocation.isEmpty) NotFound
+          if (oldLocation.isEmpty) NotFound ~> ResponseString("Not found")
           else {
             var location = oldLocation.get
             val jsonBody = JsonParser(ParserInput(Body.bytes(req)))
-            val locationJsonModel = jsonBody.convertTo[LocationJsonForUpdate]
-            if (locationJsonModel.place.nonEmpty) location = location.copy(place = locationJsonModel.place.get)
-            if (locationJsonModel.country.nonEmpty) location = location.copy(country = locationJsonModel.country.get)
-            if (locationJsonModel.city.nonEmpty) location = location.copy(city = locationJsonModel.city.get)
-            if (locationJsonModel.distance.nonEmpty) location = location.copy(distance = locationJsonModel.distance.get)
+            val values = jsonBody.asJsObject().fields
+            if (values.contains("place")) values("place") match {
+                case JsString(str) => location = location.copy(place = str)
+                case _ => throw new Exception("location not valid")
+            }
+
+            if (values.contains("country")) values("country") match {
+                case JsString(str) => location = location.copy(country = str)
+                case _ => throw new Exception("country not valid")
+            }
+            if (values.contains("city")) values("city") match {
+                case JsString(str) => location = location.copy(city = str)
+                case _ => throw new Exception("city not valid")
+            }
+            if (values.contains("distance")) values("distance") match {
+                case JsNumber(number) => location = location.copy(distance = number.toInt)
+                case _ => throw new Exception("distance not valid")
+            }
             StorageServiceImpl.update(location)
             Ok ~> ResponseString("""{}""")
           }
@@ -166,9 +212,13 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
                 toDistanceParam.flatMap(toDist => locOpt.map(_.distance < toDist.toInt)).getOrElse(true)
           }
 
-          println(params.mkString)
+//          println(params.mkString)
 
           try {
+              if(fromDateParam.nonEmpty) validateDateParam(fromDateParam.get)
+              if(toDateParam.nonEmpty) validateDateParam(toDateParam.get)
+              if(toDistanceParam.nonEmpty) toDistanceParam.get.toInt
+
             val visits = StorageServiceImpl.getVisits(id.toInt, if (seq.isEmpty) None else Some(filter))
             Ok ~> ResponseString(VisitJsonWrapper(visits.map(VisitJsonHelper.from)).toJson.compactPrint)
           } catch {
@@ -194,21 +244,23 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
 
           val seq = Seq(fromDateParam, toDateParam, fromAgeParam, toAgeParam, genderParam).flatten
 
-          def countAge(dateOfBirth: Long): Long = {
-            DateHelper.getDiffInYears(DateHelper.now, new Date(dateOfBirth))
-          }
-
           def filter: Visit => Boolean = v => {
             val userOpt = StorageServiceImpl.findUser(v.user)
-            fromDateParam.forall(from => v.visited_at > from.toLong) &&
+                fromDateParam.forall(from => v.visited_at > from.toLong) &&
                 toDateParam.forall(to => v.visited_at < to.toLong) &&
-                fromAgeParam.forall(fromAge => userOpt.forall(u => countAge(u.birth_date) > fromAge.toLong)) &&
-                toAgeParam.forall(toAge => userOpt.forall(u => countAge(u.birth_date) < toAge.toLong)) &&
+                fromAgeParam.forall(fromAge => userOpt.forall(u => DateHelper.countAge(u.birth_date) > fromAge.toLong)) &&
+                toAgeParam.forall(toAge => userOpt.forall(u => DateHelper.countAge(u.birth_date) < toAge.toLong)) &&
                 genderParam.forall(gender => userOpt.forall(u => u.gender == gender))
           }
 
-          println(params.mkString)
           try {
+
+            if(fromDateParam.nonEmpty) validateDateParam(fromDateParam.get)
+            if(toDateParam.nonEmpty) validateDateParam(toDateParam.get)
+            if(fromAgeParam.nonEmpty) fromAgeParam.get.toLong
+            if(toAgeParam.nonEmpty) toAgeParam.get.toLong
+            if(genderParam.nonEmpty) genderParam.filter(_ == "f").orElse(genderParam.filter(_ == "m")).get
+
             val avg = StorageServiceImpl.getLocationAvg(id.toInt, if (seq.isEmpty) None else Some(filter))
             avg.fold(NotFound ~> ResponseString("Not found"))(avg => Ok ~> ResponseString(AvgJson(avg).toJson.compactPrint))
           } catch {
@@ -221,6 +273,11 @@ object HighLoadCup extends cycle.Plan with cycle.SynchronousExecution with Serve
       case POST(_) => Ok
     }
   }
+
+    def validateDateParam(str: String) = {
+        val number = str.toLong
+        LocalDate.ofEpochDay(number)
+    }
 }
 
 case class VisitJsonForUpdate(id: Option[Int], location: Option[Int], user: Option[Int], visited_at: Option[Long], mark: Option[Int])
